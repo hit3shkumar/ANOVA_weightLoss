@@ -1,0 +1,233 @@
+---
+title: "Weight Loss and Diet"
+author: "Hitesh Kumar Pounraj"
+output: html_document
+---
+
+```{r, echo=FALSE, results='hold'}
+library(readr)
+WeightLoss <- read.csv("C:\\Users\\hites\\Documents\\School\\PastQtrs\\Git\\loseit.csv")
+
+```
+
+## Introduction
+```{r, echo = FALSE}
+cat(" The objecitive is to check if there's statistical evidence to suggest the group mean weight loss are equal for all diets. We are interested in the answer because it will show us if one diet or multiple are better than the other(s). We are going to take the pair-wise single factor anova hypothesis test. The goal of the test is to determine if a significant difference in weight loss between the various diet programs exists, and the program that yields the best result as a result of the diet.
+Ho: Mean,Diet A = Mean,Diet B = Mean,Diet C
+Ha: At least one diet group mean is not equal to the others.")
+
+
+
+
+```
+
+## Summary
+**(Data Summary)**
+```{r, echo = FALSE}
+#This should include things like plots (histograms, boxplots) including the interpretation of theplots, and summary values such as sample means and standard deviations.  You should have an idea about the trend ofthe data from this section.
+summary(WeightLoss)
+library(ggplot2)
+ggplot(WeightLoss, aes(x = Loss)) + geom_histogram(binwidth = 2,,color = "black",fill = "white") + facet_grid(Diet ~.) +ggtitle("Weight Loss by Diet")
+cat("The average weight loss is comparetively the highest in the Type C diet according to the histogram")
+
+```
+**(BoxPlot)**
+```{r, echo = FALSE}
+boxplot(Loss~Diet, data = WeightLoss, horizontal = TRUE, xlab = "Change in Weight in 6 months", ylab = "Diet", main = "Diet ~ Weight Loss 'Box Plot'")
+cat("The median weight loss is highest in the Type C diet, follwed by Type B diet and then Type A diet.
+    and the standard deviations for the data are as follows, and they are rougly equal, which provides a picture of the variance of the population.")
+aggregate(Loss~Diet, WeightLoss,sd)
+
+```
+
+
+## Diagnostics
+```{r, echo = FALSE}
+
+#analyse assumptions, and if you believe they are violated.  Perform diagnostics for the model.  Remove outliers if necessary.  You do not need to do transformation of variables.
+#Include assumed significance level, alpha. and why
+#Assumption that we hold for the test will hold for the analysis to be performed
+#Assumption made regarding the type I vs Type II error, (Which is worse in this scenario), choose alpha based on this assumption
+
+alpha = 0.05
+
+```
+**(outliers)**
+```{r, echo = FALSE}
+#Include assumptions regarding outliers
+weightLossModel = lm(Loss ~ Diet,data = WeightLoss)
+WeightLossEi = weightLossModel$residuals
+weightLossAnova = anova(weightLossModel)
+
+MSE <- weightLossAnova[2,3]
+nt = nrow(WeightLoss) 
+a = length(unique(WeightLoss$Diet)) 
+
+tCutoff= qt(1-alpha/(2*nt), nt-a)
+
+Rij = rstandard(weightLossModel)
+
+co.rij = which(abs(Rij) > tCutoff)
+cat(co.rij, "There exists no outliers through the ANOVA studentized method(comparing Rij and t cut off values), but based on the boxplot from the summary, Diet A and B seem to have outliers, which are removed to generate a new model")
+
+COA = which(WeightLoss$Diet =="A" & WeightLoss$Loss > 8)
+COB = which(WeightLoss$Diet =="B" & WeightLoss$Loss < -2)
+
+outliersA = COA
+outliersB = COB
+nWeightLoss = WeightLoss[-outliersB,]
+newWeightLoss = nWeightLoss[-outliersA,]
+newWeightLossModel = lm(Loss ~ Diet,data = newWeightLoss)
+
+
+
+```
+**(Assess Normality)**
+```{r, echo = FALSE}
+
+qqnorm(newWeightLossModel$residuals)
+qqline(newWeightLossModel$residuals)
+e.i <- newWeightLossModel$residuals
+SW.test <- shapiro.test(e.i)
+SW.test
+cat("The qq line and the plots seem to represent an approximate normal distribution, as y is not equal to x for the above plot, and by Shapiro-Wilks test, the pval is fairly larger, and thus we accept the claim that the distribuition is normally distribution")
+
+
+```
+**(homoscedasticity)**
+```{r, echo = FALSE}
+Residualij = rstandard(newWeightLossModel)
+library(ggplot2)
+qplot(Diet, Residualij, data = newWeightLossModel) +  ggtitle("Errors vs. Groups") + xlab("Groups") + ylab("Errors") + geom_hline(yintercept = 0,col = "purple")
+cat("The errors for the sampled population seem to have roughly the same variance.")
+
+cat("After removing the outliers from the dataset and based on the above plots and tests, We are safe to assume the following
+1) Yij's were randomly sampled
+2) the i groups are independent
+3) Errors are independednt nd nrmally distributed the mean 0 and costant variance
+
+")
+
+```
+
+
+## Analysis
+```{r, echo = FALSE}
+
+# Report back the model fit, confidence intervals, test-statistic/s, and p-value/s, nulls and alternatives, powercalculations, etc.  You may use tables here, but be sure that you organize your work.  Remember to write your resultsin full sentences where possible.
+
+```
+**(SFA)**
+```{r, echo = FALSE}
+weightLossAnova = anova(newWeightLossModel)
+weightLossAnova
+sample.Means = by(newWeightLoss$Loss,newWeightLoss$Diet,mean)
+group.Ni = by(newWeightLoss$Loss,newWeightLoss$Diet,length)
+
+#MSTO <- colSums(weightLossAnova)[3]
+#MSA <- weightLossAnova[1,3]
+#tStat <- weightLossAnova[1,4]
+
+cat("As the p-value is less than alpha, we reject the null hypothesis as there exists enough statistical evidence to support the claim that at least one diet's average weight loss is different from the other diets. 
+    Single Factor Anova is what is used to construct the model to analyze the data, and a total of 4 CIs in order to check for significant difference in the Diet programs, and perform transformations and adjustments based on the family")
+
+pVal <- weightLossAnova[1,5]
+cat("p-value =", pVal, "\n")
+
+power.function = function(ybar,ni,MSE,alpha){
+  a = length(ybar) 
+  nt = sum(ni) 
+  overall.mean = sum(ni*ybar)/nt 
+  phi = (1/sqrt(MSE))*sqrt( sum(ni*(ybar - overall.mean)^2)/a) 
+  phi.star = a *phi^2 
+  Fc = qf(1-alpha,a-1,nt-a)
+  power = 1 - pf(Fc, a-1, nt-a, phi.star)
+  return(power)
+}
+
+powerWeightLoss <- power.function(sample.Means,group.Ni,MSE,alpha)
+cat("power =", powerWeightLoss, "\n")
+
+
+```
+**(Confidence Intervals)**
+```{r, echo = FALSE}
+
+CIFunction = function(ybar,ni,ci,MSE,t){
+  if(sum(ci) != 0 & sum(ci !=0 ) != 1){
+    return
+  } 
+  else if(length(ci) != length(ni)){
+    return
+  }
+  else{
+    estimate = sum(ybar*ci)
+    SE = sqrt(MSE*sum(ci^2/ni))
+    CI = estimate + c(-1,1)*t*SE
+    result = c(estimate,CI)
+    names(result) = c("Estimate","Lower Bound","Upper Bound")
+    return(result)
+  }
+}
+
+t.Val <- qt(1 - (0.05/2), sum(group.Ni) - length(group.Ni))
+
+ci.1 <- c(1, 0, -1) # (Diet A - Diet C)
+ci.2 <- c(1, -1, 0) # (Diet A - Diet B)
+ci.3 <- c(0, 1, -1) # (Diet B - Diet C)
+
+CI.1 <- CIFunction(sample.Means,group.Ni,ci.1,MSE,t.Val)
+CI.2 <- CIFunction(sample.Means,group.Ni,ci.2,MSE,t.Val)
+CI.3 <- CIFunction(sample.Means,group.Ni,ci.3,MSE,t.Val)
+
+cat("Diet A - Diet C, the true average difference in the average weight loss between the diets is between the interval:", (CI.1[2]),(CI.1[3]), "\n")
+
+cat("Diet A - Diet B, the true average difference in the average weight loss between the diets is between the interval:", (CI.2[2]), (CI.2[3]), "\n")
+
+cat("Diet B - Diet C, the true average difference in the average weight loss between the diets is between the interval:", (CI.3[2]), (CI.3[3]), "\n")
+
+TukeyMult <- qtukey(1-alpha,a,nt-a)/sqrt(2)
+CI.T <- CIFunction(sample.Means,group.Ni,ci.2,MSE,TukeyMult)
+cat("For all pairwise comparison such as this case, Tukey's correction helps adjust the CI.
+    Diet A - Diet B corrected through Tukey's, the adjusted true average difference in the average weight loss between the diets is between the interval:", CI.T[2], CI.T[3], "\n")
+
+```
+
+## Interpretation
+```{r, echo = FALSE}
+
+
+cat("
+Alpha(0.05), is the probability of rejecting the claim that all the average weight loss for all the diet types are the same, when in reality it is. This is the probability of Type I error
+
+Power(0.87), is the probability of rejecting  the claim that all the average weight loss for all the diet types are the same, when it reality it is false. As (1-B) = Power, B = 0.13
+
+B, is the probability of accepting the claim that all the all the average weight loss for all the diet types are the same, when in reality the average weight loss for the various diets is not the same. This is the probability of Type 2 error.
+
+Thus increase either alpha or beta will lead to a decrease in power, at the 0.05 significance level, the power is at maximum while containing the range of the Confidence Interval. Therefore, with a 0.87 probability of rejecting the null hypothesis, given its true, the test can yeild required results while minimizing room for error.
+
+The hypotheis test and confidence intervals lead us to the conclusion that at least one diet's mean weight loss differs from the others. 
+We are 95 percent confident that there is a significant difference in diet group mean weight loss between diets A and C, and B and C. And the difference weight loss for Diet A and Diet C lies between the interval -3.457 and -0.800, and the difference weight loss for Diet B and Diet C lies between the interval -3.039 and -0.444.
+
+We are simultaneously 95% confident that the true difference weight loss for Diet A and Diet B lies between the interval -2.025 and 1.250. Which interprets that there exists enough statistical evidence to support the claim that Diet A and B are not significantly different from each other
+")
+
+
+```
+
+## Conclusion
+```{r, echo = FALSE}
+
+
+cat("We can conclude that there is a difference in weight loss between the three different diets. Diet A and C differ the most in weight loss, while Diet A and B do not differ at all. We can conclude that Diet C is the best diet because it yields the highest difference in weight loss between the 3 diets. ")
+```
+
+### R Appendix
+```{r, ref.label=knitr::all_labels(),echo=FALSE,eval=FALSE}
+```
+
+
+
+
+
+
